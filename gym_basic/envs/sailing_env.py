@@ -4,7 +4,7 @@ import numpy as np
 import pygame
 from pygame import gfxdraw
 import math
-from ..config.world_config import WIND_VELOCITY, WIND_DIRECTION, SCREEN_SIZE_X, SCREEN_SIZE_Y, TARGET_X, TARGET_Y
+from ..config.world_config import WIND_VELOCITY, WIND_DIRECTION, SCREEN_SIZE_X, SCREEN_SIZE_Y, INIT_X, INIT_Y, TARGET_X, TARGET_Y, TARGET_RADIUS, MAX_TRIALS
 
 class SailingEnv(gym.Env):
     """Custom Environment that follows gym interface"""
@@ -15,10 +15,8 @@ class SailingEnv(gym.Env):
         # Define action and observation space
         # They must be gym.spaces objects
         self.theta = 0
-        self.init_x = 300
-        self.init_y = 500
-        self.x = 300
-        self.y = 500
+        self.x = INIT_X
+        self.y = INIT_Y
         self.velocity = 0
         self.isopen = True
         self.boat_width = 10
@@ -32,7 +30,7 @@ class SailingEnv(gym.Env):
         # TODO - check if this works correctly
         self.action_space = spaces.Discrete(2)
         low = np.array([0, 0, 0, 0,], dtype=np.float32,)
-        high = np.array([SCREEN_SIZE_X, SCREEN_SIZE_Y, 360, 30,],dtype=np.float32,) #TODO - check theta and velocity upper bounds
+        high = np.array([SCREEN_SIZE_X, SCREEN_SIZE_Y, 360, 30,],dtype=np.float32,) # TODO - check theta and velocity upper bounds
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
 
         self.state = None
@@ -67,17 +65,19 @@ class SailingEnv(gym.Env):
             or y > SCREEN_SIZE_Y
         )
         done_successfully = bool(
-            x == TARGET_X
-            and y == TARGET_Y
+            math.fabs(x - TARGET_X) <= TARGET_RADIUS
+            and math.fabs(y - TARGET_Y) <= TARGET_RADIUS
         )
 
-        if done_unsuccessfully:
-            self.reward -= 0.1
-        elif done_successfully:
-            self.reward += 10
+        self.reward -= 0.01
 
-        if not(done_unsuccessfully or done_successfully) and self.step_ctr % 20 == 0:
-            # rewards for moving closer/farther from the target after every 20 steps. No reward if no change in distance
+        if done_unsuccessfully:
+            self.reward -= 0.5
+        elif done_successfully:
+            self.reward += 100
+
+        if not(done_unsuccessfully or done_successfully) and self.step_ctr % 10 == 0:
+            # rewards for moving closer/farther from the target after every 50 steps. No reward if no change in distance
             if (((TARGET_X - prev_x)**2 + (TARGET_Y - prev_y)**2) > ((TARGET_X - x)**2 + (TARGET_Y - y)**2)): # moved closer to target
                 self.reward += (1 / math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
             elif (((TARGET_X - prev_x)**2 + (TARGET_Y - prev_y)**2) < ((TARGET_X - x)**2 + (TARGET_Y - y)**2)): # moved farther away from target
@@ -91,10 +91,10 @@ class SailingEnv(gym.Env):
         # Reset the state of the environment to an initial state
         # super().reset()
         self.step_ctr = 0
-        self.state = (self.init_x, self.init_y, 0, 0)
+        self.state = (INIT_X, INIT_Y, 0, 0)
         return np.array(self.state, dtype=np.float32)
 
-    def render(self, trial_no, mode='human'):
+    def render(self, trial_no, highest_reward_trial_no, highest_reward, mode='human'):
         # Render the environment to the screen
         screen_width = 600
         screen_height = 600
@@ -108,7 +108,7 @@ class SailingEnv(gym.Env):
         pygame.display.set_caption("The incredible voyage - trial " + str(trial_no))
         self.screen.fill((56, 185, 224))
         # draw the target
-        gfxdraw.filled_circle(self.screen, int(TARGET_X), int(TARGET_Y), 10, (98, 194, 39))
+        gfxdraw.filled_circle(self.screen, int(TARGET_X), int(TARGET_Y), TARGET_RADIUS, (98, 194, 39))
 
         # display the prevalent wind conditions
         wind_img = pygame.image.load(r'D:/MAI/Semester 2/ATCI/Projects/openai-sailing/assets/wind.png')
@@ -129,11 +129,17 @@ class SailingEnv(gym.Env):
             if trial < trial_no:
                 for step in path:
                     if step[0] > 0 and step[1] > 0 and step[0] < 600 and step[1] < 600:
-                        pixel_array[int(step[0]), int(step[1])] = (50, 50, 50)
+                        if trial == highest_reward_trial_no:
+                            pixel_array[int(step[0]), int(step[1])] = (255, 255, 255)
+                        else:
+                            pixel_array[int(step[0]), int(step[1])] = (50, 50, 50)
                         #self.screen.set_at((path[step][0], path[step][1]), (150, 150, 150)) # very slow to render
 
         pixel_array.close()
         pygame.display.update()
+
+        if trial_no == MAX_TRIALS - 1:
+            pygame.image.save(self.screen, "gym_basic/results/vw" + str(WIND_VELOCITY) + "_wd" + str(WIND_DIRECTION) + "_hr" + str(highest_reward) + ".jpg")
 
         if mode == "human":
             pygame.display.flip()
