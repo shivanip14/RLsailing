@@ -4,6 +4,7 @@ import numpy as np
 import pygame
 from pygame import gfxdraw
 import math
+from ..config.world_config import WIND_VELOCITY, WIND_DIRECTION, SCREEN_SIZE_X, SCREEN_SIZE_Y, TARGET_X, TARGET_Y
 
 class SailingEnv(gym.Env):
     """Custom Environment that follows gym interface"""
@@ -19,26 +20,19 @@ class SailingEnv(gym.Env):
         self.x = 300
         self.y = 500
         self.velocity = 0
-        self.wind = 10
         self.isopen = True
         self.boat_width = 10
         self.boat_height = 30
         self.reward = 0
         self.screen = None
         self.step_ctr = 0
-        self.trial_path = [ [] for _ in range(500) ] # Will not be reset after every trial - stores the path history of each episode
+        self.trial_path = [[] for _ in range(500)] # Will not be reset after every trial - stores the path history of each episode
         # When to fail the episode
-        self.x_lower_bound = 0
-        self.x_upper_bound = 600
-        self.y_lower_bound = 0
-        self.y_upper_bound = 600
-        # When to terminate the episode successfully
-        self.x_target = 300
-        self.y_target = 30
+
         # TODO - check if this works correctly
         self.action_space = spaces.Discrete(2)
         low = np.array([0, 0, 0, 0,], dtype=np.float32,)
-        high = np.array([self.x_upper_bound, self.y_upper_bound, 360, 30,],dtype=np.float32,) #TODO - check theta and velocity upper bounds
+        high = np.array([SCREEN_SIZE_X, SCREEN_SIZE_Y, 360, 30,],dtype=np.float32,) #TODO - check theta and velocity upper bounds
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
 
         self.state = None
@@ -56,7 +50,7 @@ class SailingEnv(gym.Env):
         theta_change = [-0.1, 0.1][action]
         theta = theta + theta_change
 
-        velocity = self.wind*(1 - np.exp(-(theta ** 2) / (np.pi / 2)))
+        velocity = WIND_VELOCITY*(1 - np.exp(-((theta - WIND_DIRECTION) ** 2) / (np.pi / 2)))
         x = int(x + velocity*math.cos(theta))
         y = int(y - velocity*math.sin(theta))
 
@@ -67,14 +61,14 @@ class SailingEnv(gym.Env):
         print(self.state, ' -> ', theta_change)
 
         done_unsuccessfully = bool(
-            x < self.x_lower_bound
-            or x > self.x_upper_bound
-            or y < self.y_lower_bound
-            or y > self.y_upper_bound
+            x < 0
+            or x > SCREEN_SIZE_X
+            or y < 0
+            or y > SCREEN_SIZE_Y
         )
         done_successfully = bool(
-            math.fabs(x - self.x_target) <= 0.01
-            and math.fabs(y - self.y_target) <= 0.01
+            x == TARGET_X
+            and y == TARGET_Y
         )
 
         if done_unsuccessfully:
@@ -83,10 +77,10 @@ class SailingEnv(gym.Env):
             self.reward += 10
 
         if not(done_unsuccessfully or done_successfully) and self.step_ctr % 20 == 0:
-            # rewards for moving closer/farther from the target after every 100 steps
-            if (((self.x_target - prev_x)**2 + (self.y_target - prev_y)**2) > ((self.x_target - x)**2 + (self.y_target - y)**2)): #moved closer to target
+            # rewards for moving closer/farther from the target after every 20 steps. No reward if no change in distance
+            if (((TARGET_X - prev_x)**2 + (TARGET_Y - prev_y)**2) > ((TARGET_X - x)**2 + (TARGET_Y - y)**2)): # moved closer to target
                 self.reward += (1 / math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
-            elif (((self.x_target - prev_x)**2 + (self.y_target - prev_y)**2) < ((self.x_target - x)**2 + (self.y_target - y)**2)): #moved farther away from target
+            elif (((TARGET_X - prev_x)**2 + (TARGET_Y - prev_y)**2) < ((TARGET_X - x)**2 + (TARGET_Y - y)**2)): # moved farther away from target
                 self.reward -= (1 / math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
 
         debug_msg = "Step #"+str(self.step_ctr)
@@ -109,14 +103,23 @@ class SailingEnv(gym.Env):
 
         if self.screen is None:
             pygame.init()
+            pygame.font.init()
             self.screen = pygame.display.set_mode((screen_width, screen_height))
         pygame.display.set_caption("The incredible voyage - trial " + str(trial_no))
         self.screen.fill((56, 185, 224))
         # draw the target
-        gfxdraw.filled_circle(self.screen, int(self.x_target), int(self.y_target), 10, (98, 194, 39))
+        gfxdraw.filled_circle(self.screen, int(TARGET_X), int(TARGET_Y), 10, (98, 194, 39))
+
+        # display the prevalent wind conditions
+        wind_img = pygame.image.load(r'D:/MAI/Semester 2/ATCI/Projects/openai-sailing/assets/wind.png')
+        wind_img = pygame.transform.rotate(wind_img, ((-180 * WIND_DIRECTION) / np.pi))
+        display_font = pygame.font.SysFont('calibri', 14)
+        wind_indicator_text = display_font.render(str(WIND_VELOCITY)+'kts', True, (0, 0, 0))
+        self.screen.blit(wind_img, (500, 50))
+        self.screen.blit(wind_indicator_text, (515, 30))
+
         # display the boat
-        boat_img = pygame.image.load(
-            r'D:/MAI/Semester 2/ATCI/Projects/openai-playground/gym/envs/classic_control/assets/boat.svg')
+        boat_img = pygame.image.load(r'D:/MAI/Semester 2/ATCI/Projects/openai-sailing/assets/boat.svg')
         boat_img = pygame.transform.rotate(boat_img, ((-180 * self.state[2]) / np.pi))
         self.screen.blit(boat_img, (self.state[0] - (self.boat_width / 2), self.state[1] - (self.boat_height / 2)))
 
