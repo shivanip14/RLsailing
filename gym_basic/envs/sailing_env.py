@@ -12,8 +12,6 @@ class SailingEnv(gym.Env):
 
     def __init__(self):
         super(SailingEnv, self).__init__()
-        # Define action and observation space
-        # They must be gym.spaces objects
         self.theta = 0
         self.x = INIT_X
         self.y = INIT_Y
