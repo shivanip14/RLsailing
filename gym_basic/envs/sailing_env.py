@@ -28,7 +28,7 @@ class SailingEnv(gym.Env):
         # TODO - check if this works correctly
         self.action_space = spaces.Discrete(2)
         low = np.array([0, 0, -np.pi, 0,], dtype=np.float32,)
-        high = np.array([SCREEN_SIZE_X, SCREEN_SIZE_Y, np.pi, 30],dtype=np.float32,) # TODO - check theta and velocity upper bounds
+        high = np.array([SCREEN_SIZE_X, SCREEN_SIZE_Y, np.pi, 1.5*WIND_VELOCITY],dtype=np.float32,) # TODO - check theta and velocity upper bounds
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
 
         self.state = None
