@@ -4,7 +4,7 @@ import numpy as np
 import pygame
 from pygame import gfxdraw
 import math
-from ..config.world_config import WIND_VELOCITY, WIND_DIRECTION, SCREEN_SIZE_X, SCREEN_SIZE_Y, INIT_X, INIT_Y, TARGET_X, TARGET_Y, TARGET_RADIUS, MAX_TRIALS
+from ..config.world_config import WIND_VELOCITY, WIND_DIRECTION, SCREEN_SIZE_X, SCREEN_SIZE_Y, INIT_X, INIT_Y, TARGET_X, TARGET_Y, TARGET_RADIUS, MAX_TEST_TRIALS
 
 class SailingEnv(gym.Env):
     """Custom Environment that follows gym interface"""
@@ -27,13 +27,13 @@ class SailingEnv(gym.Env):
 
         # TODO - check if this works correctly
         self.action_space = spaces.Discrete(2)
-        low = np.array([0, 0, 0, 0,], dtype=np.float32,)
-        high = np.array([SCREEN_SIZE_X, SCREEN_SIZE_Y, 360, 30,],dtype=np.float32,) # TODO - check theta and velocity upper bounds
+        low = np.array([0, 0, -np.pi, 0,], dtype=np.float32,)
+        high = np.array([SCREEN_SIZE_X, SCREEN_SIZE_Y, np.pi, 30],dtype=np.float32,) # TODO - check theta and velocity upper bounds
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
 
         self.state = None
 
-    def step(self, action, trial_no):
+    def step(self, action, trial_no=0):
         # Execute one time step within the environment
         err_msg = f"{action!r} ({type(action)}) invalid"
         assert self.action_space.contains(action), err_msg
@@ -67,23 +67,22 @@ class SailingEnv(gym.Env):
             and math.fabs(y - TARGET_Y) <= TARGET_RADIUS
         )
 
-        self.reward -= 0.01
+        self.reward -= 0.1
 
         if done_unsuccessfully:
-            self.reward -= 0.5
+            self.reward -= 1
         elif done_successfully:
             self.reward += 100
 
         if not(done_unsuccessfully or done_successfully) and self.step_ctr % 10 == 0:
             # rewards for moving closer/farther from the target after every 50 steps. No reward if no change in distance
             if (((TARGET_X - prev_x)**2 + (TARGET_Y - prev_y)**2) > ((TARGET_X - x)**2 + (TARGET_Y - y)**2)): # moved closer to target
-                self.reward += (1 / math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
+                self.reward += (math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
             elif (((TARGET_X - prev_x)**2 + (TARGET_Y - prev_y)**2) < ((TARGET_X - x)**2 + (TARGET_Y - y)**2)): # moved farther away from target
-                self.reward -= (1 / math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
+                self.reward -= (math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
 
         debug_msg = "Step #"+str(self.step_ctr)
         return np.array(self.state, dtype=np.float32), self.reward, bool(done_successfully or done_unsuccessfully), {}
-
 
     def reset(self):
         # Reset the state of the environment to an initial state
@@ -92,7 +91,7 @@ class SailingEnv(gym.Env):
         self.state = (INIT_X, INIT_Y, 0, 0)
         return np.array(self.state, dtype=np.float32)
 
-    def render(self, trial_no, highest_reward_trial_no, highest_reward, mode='human'):
+    def render(self, trial_no=0, highest_reward_trial_no=0, highest_reward=0, max_trials=MAX_TEST_TRIALS, mode='human'):
         # Render the environment to the screen
         screen_width = 600
         screen_height = 600
@@ -136,7 +135,7 @@ class SailingEnv(gym.Env):
         pixel_array.close()
         pygame.display.update()
 
-        if trial_no == MAX_TRIALS - 1:
+        if trial_no == max_trials - 1:
             pygame.image.save(self.screen, "gym_basic/results/vw" + str(WIND_VELOCITY) + "_wd" + str(WIND_DIRECTION) + "_hr" + str(highest_reward) + ".jpg")
 
         if mode == "human":

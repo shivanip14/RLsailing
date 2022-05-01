@@ -1,22 +1,29 @@
-from stable_baselines.common.vec_env import DummyVecEnv
-from stable_baselines import PPO2
 from gym_basic.envs.sailing_env import SailingEnv
-from gym_basic.envs.sailing_copied import SailingEnvCopied
+from gym_basic.config.world_config import MAX_TEST_TRIALS
+from gym_basic.config.algos import rl_agos
 
-env = SailingEnvCopied()
-env = DummyVecEnv([lambda: env])
+def test(algo_name):
+    env = SailingEnv()
 
-model = PPO2.load(r'gym_basic/models/SailingCopiedOptimization')
-obs = env.reset()
+    model = rl_agos.get(algo_name).load(r'gym_basic/models/SailingOptimization_' + algo_name)
+    obs = env.reset()
 
-total_reward = 0
-
-for trial in range(2000):
-    done = False
-    env.reset()
-    while not done:
-        done = env.render()
-        action, _states = model.predict(obs)
-        obs, reward, done, info = env.step(action)
-    total_reward += reward
-print('Average reward = ', total_reward/10)
+    total_steps = 0
+    total_reward = 0
+    highest_reward = 0
+    highest_reward_trial_no = 0
+    for trial in range(MAX_TEST_TRIALS):
+        done = False
+        env.reset()
+        print('Test trial #' + str(trial))
+        while not done:
+            done = env.render(trial_no = trial, highest_reward_trial_no = highest_reward_trial_no, highest_reward = highest_reward, max_trials=MAX_TEST_TRIALS)
+            action, _states = model.predict(obs)
+            obs, reward, done, info = env.step(action, trial)
+            total_steps += 1
+        if reward >= highest_reward:
+            highest_reward = reward
+            highest_reward_trial_no = trial
+        total_reward += reward
+    print('Average # steps per trial = ', total_steps/MAX_TEST_TRIALS)
+    print('Average reward = ', total_reward/MAX_TEST_TRIALS)
