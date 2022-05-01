@@ -5,14 +5,16 @@ from gym_basic.config.algos import rl_agos
 from gym_basic.envs.sailing_env import SailingEnv
 import time
 
-algo_name = "DQN"
-algo = rl_agos.get(algo_name)
-
-env = SailingEnv()
-env = DummyVecEnv([lambda: env])
-model = algo(DQNMlpPolicy, env, verbose=1)
-model.learn(total_timesteps=50000)
-model.save(r'gym_basic/models/SailingOptimization_' + algo_name)
-model.save(r'gym_basic/models/history/SailingOptimization_' + algo_name + "_" + str(time.time()))
-env.close()
-del model
+def train(algo_name):
+    now = str(time.time())
+    env = SailingEnv()
+    env = DummyVecEnv([lambda: env])
+    if algo_name == "DQN":
+        model = rl_agos.get(algo_name)(policy=DQNMlpPolicy, env=env, verbose=1, exploration_fraction=0.15, exploration_final_eps=0.01, tensorboard_log="gym_basic/results/tensorboard/")
+    else:
+        model = rl_agos.get(algo_name)(MlpPolicy, env, verbose=1, tensorboard_log="gym_basic/results/tensorboard/")
+    model.learn(total_timesteps=50000)
+    model.save(r'gym_basic/models/SailingOptimization_' + algo_name)
+    model.save(r'gym_basic/models/history/SailingOptimization_' + algo_name + "_" + now)
+    env.close()
+    del model
