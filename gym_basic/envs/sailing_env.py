@@ -19,7 +19,7 @@ class SailingEnv(gym.Env):
         self.isopen = True
         self.boat_width = 10
         self.boat_height = 30
-        self.reward = 0
+
         self.screen = None
         self.step_ctr = 0
         self.trial_path = [[] for _ in range(500)] # Will not be reset after every trial - stores the path history of each episode
@@ -27,8 +27,8 @@ class SailingEnv(gym.Env):
 
         # TODO - check if this works correctly
         self.action_space = spaces.Discrete(2)
-        low = np.array([0, 0, -np.pi, 0,], dtype=np.float32,)
-        high = np.array([SCREEN_SIZE_X, SCREEN_SIZE_Y, np.pi, 1.5*WIND_VELOCITY],dtype=np.float32,) # TODO - check theta and velocity upper bounds
+        low = np.array([0, 0, -np.pi/2], dtype=np.float32,)
+        high = np.array([SCREEN_SIZE_X, SCREEN_SIZE_Y, np.pi/2],dtype=np.float32,)
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
 
         self.state = None
@@ -39,56 +39,65 @@ class SailingEnv(gym.Env):
         assert self.action_space.contains(action), err_msg
         assert self.state is not None, "Call reset before using step method."
         self.step_ctr += 1
-        x, y, theta, velocity = self.state
+        x, y, theta = self.state
         prev_x = x
         prev_y = y
 
         theta_change = [-0.1, 0.1][action]
-        theta = theta + theta_change
+        theta += theta_change
 
         velocity = WIND_VELOCITY*(1 - np.exp(-((theta - WIND_DIRECTION) ** 2) / (np.pi / 2)))
-        x = int(x + velocity*math.cos(theta))
-        y = int(y - velocity*math.sin(theta))
+        x = int(x + velocity*math.sin(theta))
+        y = int(y - velocity*math.cos(theta))
 
         # Store the path
         self.trial_path[trial_no].append([x, y])
 
-        self.state = (x, y, theta, velocity)
+        self.state = (x, y, theta)
         print(self.state, ' -> ', theta_change)
 
-        done_unsuccessfully = bool(
-            x < 0
-            or x > SCREEN_SIZE_X
-            or y < 0
+        channel_hit = bool(
+            x < 0 or x > SCREEN_SIZE_X
+        )
+        target_escaped = bool(
+            y < 0
             or y > SCREEN_SIZE_Y
+        )
+        boat_turned = bool(
+            math.fabs(math.fabs(theta)-math.fabs(np.pi/2)) <= 0.01
+        )
+        done_unsuccessfully = bool(
+            channel_hit or target_escaped or boat_turned
         )
         done_successfully = bool(
             math.fabs(x - TARGET_X) <= TARGET_RADIUS
             and math.fabs(y - TARGET_Y) <= TARGET_RADIUS
         )
 
-        self.reward -= 0.1
+        reward = -0.1
 
-        if done_unsuccessfully:
-            self.reward -= 1
+        if channel_hit or target_escaped:
+            reward -= 10
+        elif boat_turned:
+            reward -= 5
         elif done_successfully:
-            self.reward += 100
+            reward += 100
 
         if not(done_unsuccessfully or done_successfully) and self.step_ctr % 10 == 0:
             # rewards for moving closer/farther from the target after every 50 steps. No reward if no change in distance
             if (((TARGET_X - prev_x)**2 + (TARGET_Y - prev_y)**2) > ((TARGET_X - x)**2 + (TARGET_Y - y)**2)): # moved closer to target
-                self.reward += (math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
+                reward += 2*(math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
             elif (((TARGET_X - prev_x)**2 + (TARGET_Y - prev_y)**2) < ((TARGET_X - x)**2 + (TARGET_Y - y)**2)): # moved farther away from target
-                self.reward -= (math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
+                reward -= (math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
 
         debug_msg = "Step #"+str(self.step_ctr)
-        return np.array(self.state, dtype=np.float32), self.reward, bool(done_successfully or done_unsuccessfully), {}
+        return np.array(self.state, dtype=np.float32), reward, bool(done_successfully or done_unsuccessfully), {}
 
     def reset(self):
         # Reset the state of the environment to an initial state
         # super().reset()
         self.step_ctr = 0
-        self.state = (INIT_X, INIT_Y, 0, 0)
+        self.state = (INIT_X, INIT_Y, 0)
         return np.array(self.state, dtype=np.float32)
 
     def render(self, trial_no=0, highest_reward_trial_no=0, highest_reward=0, max_trials=MAX_TEST_TRIALS, mode='human'):

@@ -13,6 +13,7 @@ def test(algo_name):
     highest_reward = 0
     highest_reward_trial_no = 0
     for trial in range(MAX_TEST_TRIALS):
+        episodic_reward = 0
         done = False
         env.reset()
         print('Test trial #' + str(trial))
@@ -21,9 +22,10 @@ def test(algo_name):
             action, _states = model.predict(obs)
             obs, reward, done, info = env.step(action, trial)
             total_steps += 1
-        if reward >= highest_reward:
-            highest_reward = reward
+            episodic_reward += reward
+        if episodic_reward >= highest_reward:
+            highest_reward = episodic_reward
             highest_reward_trial_no = trial
-        total_reward += reward
+        total_reward += episodic_reward
     print('Average # steps per trial = ', total_steps/MAX_TEST_TRIALS)
     print('Average reward = ', total_reward/MAX_TEST_TRIALS)
