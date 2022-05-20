@@ -7,7 +7,7 @@ import math
 from ..config.world_config import WIND_VELOCITY, WIND_DIRECTION, SCREEN_SIZE_X, SCREEN_SIZE_Y, INIT_X, INIT_Y, TARGET_X, TARGET_Y, TARGET_RADIUS, MAX_TEST_TRIALS
 
 class SailingEnv(gym.Env):
-    """Custom Environment that follows gym interface"""
+    # Custom environment that follows gym interface
     metadata = {'render.modes': ['human']}
 
     def __init__(self):
@@ -23,14 +23,10 @@ class SailingEnv(gym.Env):
         self.screen = None
         self.step_ctr = 0
         self.trial_path = [[] for _ in range(500)] # Will not be reset after every trial - stores the path history of each episode
-        # When to fail the episode
-
-        # TODO - check if this works correctly
         self.action_space = spaces.Discrete(2)
         low = np.array([0, 0, -np.pi/2], dtype=np.float32,)
         high = np.array([SCREEN_SIZE_X, SCREEN_SIZE_Y, np.pi/2],dtype=np.float32,)
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
-
         self.state = None
 
     def step(self, action, trial_no=0):
@@ -54,8 +50,10 @@ class SailingEnv(gym.Env):
         self.trial_path[trial_no].append([x, y])
 
         self.state = (x, y, theta)
-        print(self.state, ' -> ', theta_change)
+        #print(self.state, ' -> ', theta_change)
 
+        # Out of bounds for x & y axis is written differently, as whether the boat escaped the channel (x-axis) or it
+        # escaped the target (y-axis), as it was tried & tested with penalising differently for each case.
         channel_hit = bool(
             x < 0 or x > SCREEN_SIZE_X
         )
@@ -84,11 +82,11 @@ class SailingEnv(gym.Env):
             reward += 100
 
         if not(done_unsuccessfully or done_successfully) and self.step_ctr % 10 == 0:
-            # rewards for moving closer/farther from the target after every 50 steps. No reward if no change in distance
+            # Rewards for moving closer/farther from the target after every 10 steps. No reward if no change in distance
             if (((TARGET_X - prev_x)**2 + (TARGET_Y - prev_y)**2) > ((TARGET_X - x)**2 + (TARGET_Y - y)**2)): # moved closer to target
                 reward += 2*(math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
             elif (((TARGET_X - prev_x)**2 + (TARGET_Y - prev_y)**2) < ((TARGET_X - x)**2 + (TARGET_Y - y)**2)): # moved farther away from target
-                reward -= (math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
+                reward -= 2*(math.sqrt((prev_x - x)**2 + (prev_y - y)**2))
 
         debug_msg = "Step #"+str(self.step_ctr)
         return np.array(self.state, dtype=np.float32), reward, bool(done_successfully or done_unsuccessfully), {}
@@ -113,10 +111,10 @@ class SailingEnv(gym.Env):
             self.screen = pygame.display.set_mode((screen_width, screen_height))
         pygame.display.set_caption("The incredible voyage - trial " + str(trial_no))
         self.screen.fill((56, 185, 224))
-        # draw the target
+        # Draw the target
         gfxdraw.filled_circle(self.screen, int(TARGET_X), int(TARGET_Y), TARGET_RADIUS, (98, 194, 39))
 
-        # display the prevalent wind conditions
+        # Display the prevalent wind conditions
         wind_img = pygame.image.load(r'D:/MAI/Semester 2/ATCI/Projects/openai-sailing/assets/wind.png')
         wind_img = pygame.transform.rotate(wind_img, ((-180 * WIND_DIRECTION) / np.pi))
         display_font = pygame.font.SysFont('calibri', 14)
@@ -124,12 +122,12 @@ class SailingEnv(gym.Env):
         self.screen.blit(wind_img, (500, 50))
         self.screen.blit(wind_indicator_text, (515, 30))
 
-        # display the boat
+        # Display the boat
         boat_img = pygame.image.load(r'D:/MAI/Semester 2/ATCI/Projects/openai-sailing/assets/boat.svg')
         boat_img = pygame.transform.rotate(boat_img, ((-180 * self.state[2]) / np.pi))
         self.screen.blit(boat_img, (self.state[0] - (self.boat_width / 2), self.state[1] - (self.boat_height / 2)))
 
-        # denoting the path as a trail
+        # Denoting the path as a trail
         pixel_array = pygame.PixelArray(self.screen)
         for trial, path in enumerate(self.trial_path):
             if trial < trial_no:
@@ -144,8 +142,9 @@ class SailingEnv(gym.Env):
         pixel_array.close()
         pygame.display.update()
 
-        if trial_no == max_trials - 1:
-            pygame.image.save(self.screen, "gym_basic/results/vw" + str(WIND_VELOCITY) + "_wd" + str(WIND_DIRECTION) + "_hr" + str(highest_reward) + ".jpg")
+        # Saving the training/testing progress every 10 steps
+        if trial_no % 10 == 0:
+            pygame.image.save(self.screen, "gym_basic/results/vw" + str(WIND_VELOCITY) + "_wd" + str(WIND_DIRECTION) + "_hr" + str(highest_reward) + "_trial" + str(trial_no) + ".jpg")
 
         if mode == "human":
             pygame.display.flip()
