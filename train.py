@@ -4,7 +4,7 @@ from stable_baselines.common.vec_env import DummyVecEnv
 from gym_basic.config.algos import rl_agos
 from gym_basic.envs.sailing_env import SailingEnv
 import time
-from .gym_basic.config.world_config import MAX_TRAIN_TRIALS
+from gym_basic.config.world_config import MAX_TRAIN_TRIALS
 
 def train(algo_name):
     print('##### Training with {} #####'.format(algo_name))
